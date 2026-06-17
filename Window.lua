@@ -326,9 +326,11 @@ function Window.new(options)
 			}, holder)
 
 			section.Instance = holder
-			section.Container = holder
+            section.Container = holder
 
-			return section
+            Components.BindSection(section)
+
+          return section
 		end
 
 		button.MouseButton1Click:Connect(function()
