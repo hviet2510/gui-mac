@@ -1,6 +1,7 @@
 -- Window.lua
 local UIS = game:GetService("UserInputService")
 local CoreGui = game:GetService("CoreGui")
+local Components = require(script.Parent.Components)
 
 local Window = {}
 Window.__index = Window
