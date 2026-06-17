@@ -67,9 +67,18 @@ function Window.new(options)
 		IgnoreGuiInset = true,
 	}, CoreGui)
 
+	local mainSize = options.Size
+	if not mainSize then
+		if UIS.TouchEnabled then
+			mainSize = UDim2.fromScale(0.95, 0.8)
+		else
+			mainSize = UDim2.fromOffset(760, 480)
+		end
+	end
+
 	local main = create("Frame", {
 		Name = "Main",
-		Size = options.Size or UDim2.fromOffset(760, 480),
+		Size = mainSize,
 		Position = options.Position or UDim2.fromScale(0.5, 0.5),
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		BackgroundColor3 = theme.Background,
@@ -77,13 +86,19 @@ function Window.new(options)
 	}, gui)
 	corner(main, 18)
 
+	create("UIStroke", {
+		Thickness = 1,
+		Transparency = 0.7,
+		Color = theme.Stroke,
+	}, main)
+
 	local topBar = create("Frame", {
 		Name = "TopBar",
 		Size = UDim2.new(1, 0, 0, 38),
 		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
+		Active = true,
 	}, main)
-	topBar.Active = true
 
 	local function dot(color, x)
 		local f = create("Frame", {
@@ -100,7 +115,7 @@ function Window.new(options)
 	dot(Color3.fromRGB(255, 189, 46), 34)
 	dot(Color3.fromRGB(40, 200, 64), 54)
 
-	local title = create("TextLabel", {
+	create("TextLabel", {
 		Name = "Title",
 		Size = UDim2.new(1, 0, 1, 0),
 		BackgroundTransparency = 1,
@@ -146,11 +161,18 @@ function Window.new(options)
 	}, content)
 	corner(card, 14)
 
+	create("UIStroke", {
+		Thickness = 1,
+		Transparency = 0.8,
+		Color = theme.Stroke,
+	}, card)
+
 	local pages = create("Frame", {
 		Name = "Pages",
 		Size = UDim2.new(1, 0, 1, 0),
 		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
+		ClipsDescendants = true,
 	}, card)
 
 	local drag = false
@@ -158,7 +180,7 @@ function Window.new(options)
 	local startPos
 
 	topBar.InputBegan:Connect(function(input)
-		if input.UserInputType == Enum.UserInputType.MouseButton1 then
+		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 			drag = true
 			dragStart = input.Position
 			startPos = main.Position
@@ -166,13 +188,17 @@ function Window.new(options)
 	end)
 
 	UIS.InputEnded:Connect(function(input)
-		if input.UserInputType == Enum.UserInputType.MouseButton1 then
+		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 			drag = false
 		end
 	end)
 
 	UIS.InputChanged:Connect(function(input)
-		if drag and input.UserInputType == Enum.UserInputType.MouseMovement then
+		if not drag then
+			return
+		end
+
+		if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
 			local delta = input.Position - dragStart
 			main.Position = UDim2.new(
 				startPos.X.Scale,
@@ -192,12 +218,12 @@ function Window.new(options)
 	self.Pages = pages
 
 	function self:CreateTab(name, icon)
-		local Tab = {}
-		Tab.__index = Tab
-		Tab.Window = self
-		Tab.Name = name
-		Tab.Icon = icon
-		Tab.Sections = {}
+		local window = self
+		local tab = {}
+		tab.Window = window
+		tab.Name = name
+		tab.Icon = icon
+		tab.Sections = {}
 
 		local button = create("TextButton", {
 			Name = name .. "_Tab",
@@ -206,7 +232,7 @@ function Window.new(options)
 			BorderSizePixel = 0,
 			Text = "",
 			AutoButtonColor = false,
-		}, self.Sidebar)
+		}, window.Sidebar)
 		corner(button, 10)
 
 		local stroke = create("UIStroke", {
@@ -223,7 +249,7 @@ function Window.new(options)
 			Font = Enum.Font.GothamMedium,
 			TextSize = 14,
 			TextXAlignment = Enum.TextXAlignment.Left,
-			TextColor3 = theme.SubText,
+			TextColor3 = window.Theme.SubText,
 			Text = (icon and (icon .. "  ") or "") .. name,
 		}, button)
 
@@ -236,49 +262,55 @@ function Window.new(options)
 			ScrollBarThickness = 2,
 			AutomaticCanvasSize = Enum.AutomaticSize.Y,
 			CanvasSize = UDim2.new(0, 0, 0, 0),
-		}, self.Pages)
+		}, window.Pages)
 
 		padding(page, 14, 14, 14, 14)
 		listLayout(page, 10)
 
-		function Tab:SetSelected(state)
+		function tab:SetSelected(state)
 			if state then
 				button.BackgroundTransparency = 0
-				button.BackgroundColor3 = theme.Selected
+				button.BackgroundColor3 = window.Theme.Selected
 				stroke.Transparency = 0.75
-				label.TextColor3 = theme.Text
+				label.TextColor3 = window.Theme.Text
 			else
 				button.BackgroundTransparency = 1
 				stroke.Transparency = 1
-				label.TextColor3 = theme.SubText
+				label.TextColor3 = window.Theme.SubText
 			end
 		end
 
-		function Tab:Select()
-			for _, t in ipairs(self.Window.Tabs) do
-				t.Page.Visible = false
-				t:SetSelected(false)
+		function tab:Select()
+			for _, other in ipairs(window.Tabs) do
+				other.Page.Visible = false
+				other:SetSelected(false)
 			end
 			page.Visible = true
-			Tab:SetSelected(true)
-			self.Window.ActiveTab = Tab
+			tab:SetSelected(true)
+			window.ActiveTab = tab
 		end
 
-		function Tab:CreateSection(sectionTitle)
-			local Section = {}
-			Section.__index = Section
-			Section.Window = self.Window
-			Section.Tab = Tab
-			Section.Name = sectionTitle
+		function tab:CreateSection(sectionTitle)
+			local section = {}
+			section.Window = window
+			section.Tab = tab
+			section.Name = sectionTitle
+			section.Components = {}
 
 			local holder = create("Frame", {
 				Name = sectionTitle .. "_Section",
 				Size = UDim2.new(1, 0, 0, 0),
 				AutomaticSize = Enum.AutomaticSize.Y,
-				BackgroundColor3 = theme.Card,
+				BackgroundColor3 = window.Theme.Card,
 				BorderSizePixel = 0,
 			}, page)
 			corner(holder, 12)
+
+			create("UIStroke", {
+				Thickness = 1,
+				Transparency = 0.85,
+				Color = window.Theme.Stroke,
+			}, holder)
 
 			padding(holder, 12, 12, 12, 12)
 			listLayout(holder, 8)
@@ -289,141 +321,30 @@ function Window.new(options)
 				Font = Enum.Font.GothamSemibold,
 				TextSize = 15,
 				TextXAlignment = Enum.TextXAlignment.Left,
-				TextColor3 = theme.Text,
+				TextColor3 = window.Theme.Text,
 				Text = sectionTitle,
 			}, holder)
 
-			Section.Instance = holder
-			Section.Components = {}
+			section.Instance = holder
+			section.Container = holder
 
-			function Section:Button(opts)
-				opts = opts or {}
-				local b = create("TextButton", {
-					Size = UDim2.new(1, 0, 0, 34),
-					BackgroundColor3 = Color3.fromRGB(62, 62, 65),
-					BorderSizePixel = 0,
-					AutoButtonColor = false,
-					Text = opts.Title or "Button",
-					Font = Enum.Font.GothamMedium,
-					TextSize = 14,
-					TextColor3 = theme.Text,
-				}, holder)
-				corner(b, 10)
-				if opts.Callback then
-					b.MouseButton1Click:Connect(opts.Callback)
-				end
-				return b
-			end
-
-			function Section:Toggle(opts)
-				opts = opts or {}
-				local state = opts.Default and true or false
-
-				local wrap = create("Frame", {
-					Size = UDim2.new(1, 0, 0, 38),
-					BackgroundColor3 = Color3.fromRGB(58, 58, 60),
-					BorderSizePixel = 0,
-				}, holder)
-				corner(wrap, 10)
-
-				create("TextLabel", {
-					BackgroundTransparency = 1,
-					Position = UDim2.fromOffset(12, 0),
-					Size = UDim2.new(1, -70, 1, 0),
-					Font = Enum.Font.GothamMedium,
-					TextSize = 14,
-					TextXAlignment = Enum.TextXAlignment.Left,
-					TextColor3 = theme.Text,
-					Text = opts.Title or "Toggle",
-				}, wrap)
-
-				local switch = create("Frame", {
-					Size = UDim2.fromOffset(44, 22),
-					Position = UDim2.new(1, -56, 0.5, -11),
-					BackgroundColor3 = state and theme.Accent or Color3.fromRGB(90, 90, 93),
-					BorderSizePixel = 0,
-				}, wrap)
-				corner(switch, 999)
-
-				local knob = create("Frame", {
-					Size = UDim2.fromOffset(18, 18),
-					Position = state and UDim2.fromOffset(24, 2) or UDim2.fromOffset(2, 2),
-					BackgroundColor3 = Color3.fromRGB(255, 255, 255),
-					BorderSizePixel = 0,
-				}, switch)
-				corner(knob, 999)
-
-				local function set(v)
-					state = v
-					switch.BackgroundColor3 = v and theme.Accent or Color3.fromRGB(90, 90, 93)
-					knob.Position = v and UDim2.fromOffset(24, 2) or UDim2.fromOffset(2, 2)
-					if opts.Callback then
-						opts.Callback(v)
-					end
-				end
-
-				wrap.InputBegan:Connect(function(input)
-					if input.UserInputType == Enum.UserInputType.MouseButton1 then
-						set(not state)
-					end
-				end)
-
-				return {
-					Instance = wrap,
-					Set = set,
-					Get = function()
-						return state
-					end,
-				}
-			end
-
-			function Section:Textbox(opts)
-				opts = opts or {}
-				local box = create("TextBox", {
-					Size = UDim2.new(1, 0, 0, 34),
-					BackgroundColor3 = Color3.fromRGB(62, 62, 65),
-					BorderSizePixel = 0,
-					Text = "",
-					PlaceholderText = opts.Placeholder or "Enter text",
-					ClearTextOnFocus = false,
-					Font = Enum.Font.GothamMedium,
-					TextSize = 14,
-					TextColor3 = theme.Text,
-					PlaceholderColor3 = theme.SubText,
-				}, holder)
-				corner(box, 10)
-				if opts.Callback then
-					box.FocusLost:Connect(function(enterPressed)
-						if enterPressed then
-							opts.Callback(box.Text)
-						end
-					end)
-				end
-				return box
-			end
-
-			return Section
-		end
-
-		function Tab:SelectIfFirst()
-			if #self.Window.Tabs == 0 then
-				Tab:Select()
-			end
+			return section
 		end
 
 		button.MouseButton1Click:Connect(function()
-			Tab:Select()
+			tab:Select()
 		end)
 
-		Tab.Button = button
-		Tab.Page = page
+		tab.Button = button
+		tab.Page = page
 
-		table.insert(self.Tabs, Tab)
-		if #self.Tabs == 1 then
-			Tab:Select()
+		table.insert(window.Tabs, tab)
+
+		if #window.Tabs == 1 then
+			tab:Select()
 		end
 
-		return setmetatable(Tab, Tab)
+		return tab
 	end
 
 	function self:Destroy()
@@ -434,5 +355,7 @@ function Window.new(options)
 
 	return self
 end
+
+Window.CreateWindow = Window.new
 
 return Window
