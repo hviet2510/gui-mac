@@ -1,0 +1,1 @@
+return function(text) print(text) end
